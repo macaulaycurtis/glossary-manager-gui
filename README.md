@@ -1,0 +1,1 @@
+# glossary-manager-gui
