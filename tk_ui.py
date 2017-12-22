@@ -5,14 +5,14 @@ from configparser import ConfigParser
 from glossarymanager import GlossaryManager
 import hotkeys
 
-class Glossary_Manager_GUI(object):
+class Glossary_Manager_GUI():
     
     def __init__(self, master):
         self.master = master
         self._setup_gm()
         self._create_input_group()
         self._create_output_group()
-        self.setup_window()
+        self._setup_window()
 
         self.search_box.focus()
 
@@ -132,7 +132,7 @@ class Glossary_Manager_GUI(object):
         size_grip = ttk.Sizegrip()
         size_grip.grid(column=1, row=2, sticky='se', in_= output_group)
 
-    def setup_window(self):
+    def _setup_window(self):
         self.master.title(self.config['title'])
         self.master.minsize(self.config['minimum_x'], self.config['minimum_y'])
         if self.config.getboolean('start_minimized'):
@@ -212,7 +212,16 @@ class Glossary_Manager_GUI(object):
         self.display_results()
 
     def add(self, arg):
-        print(arg)
+        add_dialogue = tk.Toplevel(self.master)
+        add_dialogue.title('Add new entry')
+        add_dialogue.transient(self.master)
+        
+        label = tk.Label(add_dialogue, text=arg)
+        label.grid(row=0, column=0)
+        
+        add_dialogue.grab_set()
+        add_dialogue.grid_rowconfigure(1, weight=1)
+        
 
     def save_all(self, event):
         saved = self.gm.save()
@@ -222,7 +231,10 @@ class Glossary_Manager_GUI(object):
     def hotkey_listen(self):
         """ Instantiate the global hotkey listener, which returns highlighted text from other
        programs via the clipboard, then search for that text. """
-        hotkey_listener = hotkeys.GlobalHotkeyListener(self.master.winfo_id(), self.config['hotkey_mod'], self.config['hotkey_key'])
+        hotkey_listener = hotkeys.GlobalHotkeyListener(self.master
+                                                       , self.config['hotkey_mod']
+                                                       , self.config['hotkey_key']
+                                                       , self.config.getfloat('hotkey_sleep_time'))
         while True:
             paste = hotkey_listener.listen()
             paste = paste.strip()
@@ -235,4 +247,7 @@ class Glossary_Manager_GUI(object):
 if __name__ == '__main__':
     root = tk.Tk()
     listbox = Glossary_Manager_GUI(root)
+    root.lift()
+    root.update()
     root.mainloop()
+
