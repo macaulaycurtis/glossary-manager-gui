@@ -4,49 +4,67 @@ from glossary import Glossary
 class GlossaryManager:
 
     def __init__(self, path):
-        """ Declare a dict to hold Glossary objects and attempt to load all files in the directory.
-        ARGS: the glossary folder path (string) """
-        self.glossary_dir = path
         self.glossaries = {}
+        self.load_all(path)
+
+    def load_all(self, path):
+        """Attempt to load all files in the directory (str)"""
+        self.glossary_dir = path
         try:
             filenames = (os.listdir(self.glossary_dir))
-        except FileNotFoundError: raise FileNotFoundError('The glossary directory does not exist.')
-        for filename in filenames:
-            filepath = self.glossary_dir + '/' + filename
-            if os.path.isfile(filepath):
-                t = threading.Thread(target=self.add_glossary, args=(filepath, filename))
-                t.start()
-                t.join()
+            for filename in filenames:
+               filepath = self.glossary_dir + '/' + filename
+               if os.path.isfile(filepath):
+                   t = threading.Thread(target=self.add_glossary, args=(filepath, filename))
+                   t.start()
+                   t.join()
+        except FileNotFoundError:
+            pass
 
-    def add_glossary(self, filepath, filename):
+    def add_glossary(self, filepath, filename, new=False):
         """ Add a glossary to the glossaries dict.
         ARGS: filepath (string), short_name (string) """
-        self.glossaries.update({filename : Glossary(filepath, filename)})
+        self.glossaries.update({filename : Glossary(filepath, filename, new)})
 
-    def new_glossary(self, filename):
+    def new_glossary(self, filepath, filename):
         """ Add a new empty glossary to the glossaries dict.
         ARGS: filename (str) """
-        filepath = self.glossary_dir + '/' + filename
-        if not filename in os.listdir(self.glossary_dir):
+        try:
+            if not filename in os.listdir(self.glossary_dir):
+                self.add_glossary(filepath, filename, new=True)
+        except FileNotFoundError:
             self.add_glossary(filepath, filename, new=True)
 
     def list_glossaries(self):
         """ List all the currently loaded glossaries by short name """
         glossary_list = list(self.glossaries.keys())
-        for g in glossary_list: g.replace('\'', '')
+        for g in glossary_list:
+            g.replace('\'', '')
         return glossary_list
    
     def search(self, keyword, fuzzy=0, column='source'):
         """ Searches all glossaries for a keyword. ARGS: keyword (string) """
         search_results = []
         for glossary in self.glossaries:
-            t = threading.Thread(target=self.glossaries[glossary].search,
-                                 args=(search_results, keyword, column, fuzzy))
+            t = threading.Thread(
+                target=self.glossaries[glossary].search
+                , args=(search_results, keyword, column, fuzzy)
+                )
             t.start()
             t.join()
-        if fuzzy: search_results.sort(key = lambda s: s['ratio'], reverse=True)
-        else: search_results.sort(key = lambda s: len(s['source']))
+        if fuzzy:
+            search_results.sort(key = lambda s: s['ratio'], reverse=True)
+        else:
+            search_results.sort(key = lambda s: len(s['source']))
         return search_results
+
+    def display_contents(self, glossary):
+        return self.glossaries[glossary].display()
+
+    def unsaved_changes(self):
+        for g in self.glossaries:
+            if self.glossaries[g].modified: return True
+        return False
         
     def delete(self, result):
         """Delete an entry from a Glossary.
@@ -63,17 +81,17 @@ class GlossaryManager:
         ARGS: new entry (OrderedDict) """
         self.glossaries[glossary].add(entry)
 
-    def save(self, *glossary):
+    def save(self, glossary=False):
         """ Save a Glossary (or all) and return a list of saved glossaries.
         ARGS: short name (string)
         RETURNS: saved glossaries (list) """
         saved_glossaries = []
         if not glossary:
             for g in self.glossaries:
-                if self.glossaries[g].modified == True:
+                if self.glossaries[g].modified:
                     self.glossaries[g].save()
                     saved_glossaries.append(self.glossaries[g].filename)
             return str(saved_glossaries).strip('[]').replace('\'', '')
-        elif self.glossaries[glossary].modified == True:
+        elif self.glossaries[glossary].modified:
             self.glossaries[glossary].save()
             return glossary

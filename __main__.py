@@ -4,12 +4,13 @@ import tkinter as tk
 
 def run():
     root = tk.Tk()
-    ui = Glossary_Manager_GUI(root)
+    ui = GlossaryManagerGUI(root)
 
     listen_thread = Thread(target=ui.hotkey_listen, daemon=True)
     listen_thread.start()
 
     root.mainloop()
+    ui.hotkey_listener.unregister()
 
 if __name__ == '__main__':
     run()

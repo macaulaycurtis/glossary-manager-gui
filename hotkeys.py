@@ -3,10 +3,10 @@ import ctypes, time, pyperclip
 
 class GlobalHotkeyListener:
 
-    def __init__(self, root, m, k, sleeptime):
-        """Register hotkey (shift + insert)"""
+    def __init__(self, m, k, sleeptime, root=None):
+        """Register hotkey"""
         mod = {'shift' : win32con.MOD_SHIFT, 'control' : win32con.MOD_CONTROL}
-        key = {'insert' : 0x2D, 'f8' : 0x77}
+        key = {'insert' : 0x2D, 'f8' : 0x77, 'cbracket' : 0xDD}
         ctypes.windll.user32.RegisterHotKey(None, 1, mod[m], key[k])
         self.root = root
         self.sleeptime = sleeptime
@@ -16,9 +16,11 @@ class GlobalHotkeyListener:
         msg = ctypes.wintypes.MSG()
         while ctypes.windll.user32.GetMessageW(ctypes.byref(msg), None, 0, 0) != 0:
             if msg.message == win32con.WM_HOTKEY:
-                if self.root.focus_get() == None:
-                    paste = self.get_highlighted_text()
-                    return paste
+                if self.root == None or self.root.focus_get() == None:
+                    return self.get_highlighted_text()
+
+    def unregister(self):
+        ctypes.windll.user32.UnregisterHotKey(None, 1)
 
     def get_highlighted_text(self):
         """Save clipboard, borrow it for a second to copy the highlighted text, then restore the original.
@@ -37,3 +39,12 @@ class GlobalHotkeyListener:
         search_arg = pyperclip.paste()
         pyperclip.copy(original_clipboard)
         return search_arg
+    
+if __name__ == '__main__':
+    ghl = GlobalHotkeyListener('shift', 'insert', 1)
+    for i in range(2):
+        #paste = ghl.listen()
+        #print(paste)
+        time.sleep(ghl.sleeptime)
+        win32api.keybd_event(0xDF, 0, 0, 0)
+    

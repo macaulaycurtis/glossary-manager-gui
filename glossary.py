@@ -4,15 +4,13 @@ from difflib import SequenceMatcher
 
 class Glossary:
 
-    def __init__(self, filepath, filename, new=False):
-        self.filepath = filepath
+    def __init__(self, filepath, filename, new):
+        if new:
+            file = open(filepath, 'w', encoding='utf-8')
+            file.close()
+        self.filepath = filepath    
         self.filename = filename
         self.filetype = filepath[filepath.rfind('.')+1:]
-        
-        if new == True:
-            file = open(self.filepath, 'w', encoding='utf-8')
-            file.close()
-            
         self.read_from_file()
         self.modified = False
 
@@ -31,12 +29,15 @@ class Glossary:
             sheet = wb.sheet_by_index(0)
             self.sheetname = sheet.name
             for row in range(sheet.nrows):
-                try: context = str(sheet.cell(row,2).value)
-                except IndexError: context = ''
-                self.content.update( {self.last_index : OrderedDict(
-                    [('source', str(sheet.cell(row,0).value))
-                     , ('translation', str(sheet.cell(row,1).value))
-                     , ('context', context)]) } )
+                columns = OrderedDict([('source', ''), ('translation', ''), ('context', '')])
+                i = 0
+                for c in columns:
+                    try:
+                        columns[c] = str(sheet.cell(row, i).value)
+                    except IndexError:
+                        columns[c] = ''
+                    i += 1
+                self.content.update({self.last_index : columns})
                 self.last_index += 1
 
     def search(self, search_results, keyword, column='source', fuzzy=0.0):
@@ -47,23 +48,41 @@ class Glossary:
             for row in self.content:
                 r = self.content[row]
                 if keyword in r[column]:
-                    search_results.append({'source' : r['source']
-                                    , 'translation' : r['translation']
-                                    , 'context': r['context']
-                                    , 'glossary' : self.filename
-                                    , 'index' : row
-                                    , 'ratio' : None})
+                    search_results.append({
+                        'source' : r['source']
+                        , 'translation' : r['translation']
+                        , 'context': r['context']
+                        , 'glossary' : self.filename
+                        , 'index' : row
+                        , 'ratio' : None
+                        })
         if fuzzy:
             for row in self.content:
                 r = self.content[row]
                 ratio = SequenceMatcher(None, keyword, r[column]).ratio()
                 if  ratio > fuzzy:
-                    search_results.append({'source' : r['source']
-                                    , 'translation' : r['translation']
-                                    , 'context': r['context']
-                                    , 'glossary' : self.filename
-                                    , 'index' : row
-                                    , 'ratio' : ratio})
+                    search_results.append({
+                        'source' : r['source']
+                        , 'translation' : r['translation']
+                        , 'context': r['context']
+                        , 'glossary' : self.filename
+                        , 'index' : row
+                        , 'ratio' : ratio
+                        })
+
+    def display(self):
+        display_results = []
+        for row in self.content:
+            r = self.content[row]
+            display_results.append({
+                'source' : r['source']
+                , 'translation' : r['translation']
+                , 'context': r['context']
+                , 'glossary' : self.filename
+                , 'index' : row
+                , 'ratio' : None
+                })
+        return display_results
 
     def add(self, entry):
         """ Receive an entry as an ordered dict and append it to self.content. """
@@ -78,9 +97,11 @@ class Glossary:
 
     def modify(self, index, result):
         """ Receive the index and an amended entry and replace it in self.content. """
-        entry = OrderedDict([('source', result['source'])
-                         , ('translation', result['translation'])
-                         , ('context', result['context'])])
+        entry = OrderedDict([
+            ('source', result['source'])
+            , ('translation', result['translation'])
+            , ('context', result['context'])
+            ])
         if entry == self.content[index]:
             return
         else:
@@ -89,8 +110,10 @@ class Glossary:
 
     def save(self):
         """ Write any changes to file. """
-        if self.filetype == 'csv': self.save_csv()
-        elif self.filetype == 'xls' or 'xlsx': self.save_excel()
+        if self.filetype == 'csv':
+            self.save_csv()
+        elif self.filetype == 'xls' or 'xlsx':
+            self.save_excel()
 
     def save_csv(self):
         with open(self.filepath, 'w', newline='', encoding='utf-8') as file:
@@ -110,5 +133,7 @@ class Glossary:
             sheet.write(row, 0, self.content[row]['source'])
             sheet.write(row, 1, self.content[row]['translation'])
             sheet.write(row, 2, self.content[row]['context'])
-        if self.filetype == 'xls': wb.save(self.filepath)
-        else: wb.close()
+        if self.filetype == 'xls':
+            wb.save(self.filepath)
+        else:
+            wb.close()
