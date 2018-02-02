@@ -1,21 +1,24 @@
 import tkinter as tk
-import tkinter.ttk as ttk
-import hotkeys
-from tkinter import filedialog, messagebox
+from tkinter import filedialog, messagebox, ttk
 from os.path import relpath
 from copy import copy
 from configparser import ConfigParser
-from glossarymanager import GlossaryManager
 from collections import OrderedDict
+from gm.glossary_manager import GlossaryManager
+from hotkeys import GlobalHotkeyListener
+from tk_custom.spreadsheet import Spreadsheet
+from tk_custom.add_dialogue import AddDialogue
+import licence
 
-class GlossaryManagerGUI():
+class GlossaryManagerGUI(tk.Frame):
     
-    def __init__(self, master):
-        self.master = master
+    def __init__(self, root):
+        tk.Frame.__init__(self, root)
+        self.pack(fill='both', expand=True)
+        self.parent = root
         self._setup_attributes()
         self._setup_bindings()       
-        self._create_input_group()
-        self._create_output_group()
+        self._create_widgets()
         self._create_menu_bar() 
         self._setup_window()
         self.setup_gm()
@@ -28,18 +31,22 @@ class GlossaryManagerGUI():
         self.history = []
         self.filters = {'fuzzy' : tk.BooleanVar(), 'reverse' : tk.BooleanVar()}
         self.active_glossary = tk.StringVar()
+        self.active_glossary.trace('w', self.change_default_glossary)
+        self.status = tk.StringVar()
+        self.gm = GlossaryManager(self.config['path'])
 
     def _setup_bindings(self):
-        self.master.bind('<Control-s>', self.save_all)
-        self.master.bind('<Control-q>', self.exit)
-        self.master.bind('<Control-w>', self.exit)
-        self.master.bind('<Control-o>', self.open)
-        self.master.bind('<Control-n>', self.new)
-        self.master.protocol('WM_DELETE_WINDOW', self.exit)
+        self.parent.bind('<Control-s>', self.save_all)
+        self.parent.bind('<Control-q>', self.exit)
+        self.parent.bind('<Control-w>', self.exit)
+        self.parent.bind('<Control-o>', self.open)
+        self.parent.bind('<Control-n>', self.new)
+        self.parent.protocol('WM_DELETE_WINDOW', self.exit)
 
-    def _create_input_group(self):
-        input_group = tk.Frame(self.master)
-        input_group.pack(fill='x')
+    def _create_widgets(self):
+        self.grid_columnconfigure(0, weight=1)
+        input_group = tk.Frame(self)
+        input_group.grid(row=0, sticky='new', columnspan=2)
         input_group.grid_columnconfigure(0, weight=1)
 
         # SEARCH BOX #
@@ -76,32 +83,12 @@ class GlossaryManagerGUI():
         add_button = tk.Button(text='Add', command=lambda: self.add(self.search_box.get()))
         add_button.grid(row=1, column=1, sticky='ew', padx=2, pady=2, in_=input_group)
 
-    def _create_output_group(self):
-        output_group = tk.Frame(self.master)
-        output_group.pack(fill='both', expand=True)
-        output_group.grid_columnconfigure(0, weight=1)
-        output_group.grid_rowconfigure(0, weight=1)
+        # OUTPUT #
+        self.output = Spreadsheet(self, self.gm, self.config)
+        self.output.grid(row=1, sticky='nesw', columnspan=2)
+        self.grid_rowconfigure(1, weight=8)
 
-        # TREEVIEW #
-        column_headings = ['Source', 'Translation', 'Context', 'Glossary', 'Result']
-        displayed_columns = ['Source', 'Translation', 'Context', 'Glossary']
-        self.tree = ttk.Treeview(columns=column_headings, displaycolumns=displayed_columns, show='headings')
-        for c in displayed_columns:
-            self.tree.heading(c, text=c)
-            self.tree.column(c,minwidth=100)
-        self.tree.grid(column=0, row=0, sticky='nsew', in_=output_group)
-        ttk.Style().configure('Treeview', font=self.config['font1'])
-        ttk.Style().configure('Treeview.Heading', font=self.config['font2'])          
-
-        # SCROLLBARS #
-        vertical_scroll = ttk.Scrollbar(orient='vertical', command=self.tree.yview)
-        horizontal_scroll = ttk.Scrollbar(orient='horizontal', command=self.tree.xview)
-        vertical_scroll.grid(column=1, row=0, sticky='ns', in_=output_group)
-        horizontal_scroll.grid(column=0, row=1, sticky='ew', in_=output_group)
-        self.tree.configure(yscrollcommand=vertical_scroll.set, xscrollcommand=horizontal_scroll.set)
-        
         # STATUS BAR #
-        self.status = tk.StringVar()
         status_bar = tk.Label(
             textvariable=self.status
             , font=self.config['font2']
@@ -109,41 +96,14 @@ class GlossaryManagerGUI():
             , anchor='w'
             )
         status_bar.bind('<Configure>', lambda event: status_bar.configure(wraplength=event.width))
-        status_bar.grid(column=0, row=2, sticky='ew', in_=output_group)
+        status_bar.grid(column=0, row=2, sticky='esw', in_=self)
 
         # SIZE GRIP #
         size_grip = ttk.Sizegrip()
-        size_grip.grid(column=1, row=2, sticky='se', in_= output_group)
-
-        # TREE CONTEXT MENUS #
-        cell_context = tk.Menu(tearoff=0)
-        cell_context.add_command(label='Edit', command=self.edit)
-        cell_context.add_command(label='Delete', command=self.delete)
-        
-        def context_menu(event):
-            cell_context.entryconfig(0, state='normal')
-            self.cell_x = event.x_root - self.tree.winfo_rootx()
-            self.cell_y = event.y_root - self.tree.winfo_rooty()
-            if self.tree.identify_region(self.cell_x, self.cell_y) == 'cell':
-                if not self.tree.identify_row(self.cell_y) in self.tree.selection():
-                    self.tree.selection_set(self.tree.identify_row(self.cell_y))
-                if self.tree.identify_column(self.cell_x) == '#4':
-                    cell_context.entryconfig(0, state='disabled')
-                cell_context.post(event.x_root, event.y_root)
-
-        def double_click_action(event):
-            self.cell_x = event.x_root - self.tree.winfo_rootx()
-            self.cell_y = event.y_root - self.tree.winfo_rooty()
-            if self.tree.identify_region(self.cell_x, self.cell_y) == 'cell':
-                if not self.tree.identify_column(self.cell_x) == '#4':
-                    self.edit()
-
-        self.tree.bind('<Button-3>', context_menu)
-        self.tree.bind('<Double-Button-1>', double_click_action)
-        self.tree.bind('<Delete>', self.delete)
+        size_grip.grid(column=1, row=2, sticky='se', in_=self)
 
     def _create_menu_bar(self):
-        menu_bar = tk.Menu(self.master)
+        menu_bar = tk.Menu(self)
 
         # FILE MENU #
         file_menu = tk.Menu(menu_bar, tearoff=0)
@@ -163,17 +123,17 @@ class GlossaryManagerGUI():
         menu_bar.add_cascade(label='Help', menu=help_menu)
         help_menu.add_command(label='About', command=self.about)
 
-        self.master.config(menu=menu_bar)
+        self.parent.config(menu=menu_bar)
 
     def _setup_window(self):
-        self.master.title(self.config['title'])
-        self.master.minsize(self.config['minimum_x'], self.config['minimum_y'])
+        self.parent.title(self.config['title'])
+        self.parent.minsize(self.config['minimum_x'], self.config['minimum_y'])
         if self.config.getboolean('start_minimized'):
-            self.master.iconify()
-        self.master.update()
+            selfroot.iconify()
+        self.parent.update()
 
     def setup_gm(self):
-        self.gm = GlossaryManager(self.config['path'])
+        self.gm.load()
         try:
             if self.config['default_glossary'] in self.gm.list_glossaries():
                 self.active_glossary.set(self.config['default_glossary'])  
@@ -185,8 +145,7 @@ class GlossaryManagerGUI():
             self.status.set('No glossaries loaded: <{}> either does not exist or contains no glossary files.'.format(self.config['path']))
 
     def search(self, arg='', fuzzy=0.0, column='source'):
-        """Search for a keyword. Returns search results in the format:
-OrderedDict([{source, translation, context, glossary, index, ratio}])"""
+        """Search for a keyword. Returns search results in the format OrderedDict([{source, translation, context, glossary, index, ratio}])"""
         if arg == '': return
         self.history_menu.add_command(
             label=arg
@@ -197,139 +156,16 @@ OrderedDict([{source, translation, context, glossary, index, ratio}])"""
         self.search_results = self.gm.search(arg, fuzzy, column)
         if len(self.search_results) == 0: self.status.set('No results found.')
         else: self.status.set('Found {} results.'.format(len(self.search_results)))
-        self.display_results(self.search_results)
-
-    def display_results(self, search_results):
-        """Display the results of a search in the ttk tree."""
-        self.tree.delete(*self.tree.get_children())
-        i = 0
-        for r in search_results:
-            item = (r['source'], r['translation'], r['context'], r['glossary'], i)
-            iid = self.tree.insert('', 'end', values=item)
-            i += 1
-
-    def edit(self, event=None):
-        """Identify what cell was clicked on, create an editable popup, then update the cell when the popup is closed."""
-        # Identify what cell was clicked on #
-        column = self.tree.identify_column(self.cell_x)
-        iid = self.tree.identify_row(self.cell_y)
-        x,y,w,h = self.tree.bbox(iid, column)
-        mid_y = int(y + h / 2)
-
-        # Create an editable popup containing the text from that cell. #
-        edit_text = tk.StringVar()
-        edit_text.set(self.tree.set(iid, column))
-        self.cell_popup = tk.Entry(self.tree, textvariable=edit_text, font=self.config['font1'])
-        self.cell_popup.place(x=x, y=mid_y, anchor='w', width=w)
-        self.cell_popup.focus()
-        self.master.update()
-
-        # Position the cursor within the popup at the click. #
-        relative_x = self.cell_popup.winfo_pointerx() - self.tree.winfo_rootx() - x
-        self.cell_popup.icursor(self.cell_popup.index('@{}'.format(relative_x)))
-
-        def click_off(event):
-            event_x = event.x_root - self.tree.winfo_rootx()
-            event_y = event.y_root - self.tree.winfo_rooty()
-            if (not event_x in range(x+2, x+w-2)) or (not event_y in range(y+2, y+h-2)):
-                self.cell_popup.config(takefocus=0)
-                close_popup(event)
-
-        def close_popup(event):
-            self.tree.set(iid, column, edit_text.get())
-            result_number = int(self.tree.set(iid, 'Result'))
-            key = self.tree.heading(column)['text'].lower()
-            self.search_results[result_number][key] = edit_text.get()
-            self.gm.replace_entry(self.search_results[result_number])
-            escape_popup(event)
-
-        def escape_popup(event):
-            self.cell_popup.destroy()
-            self.master.unbind('<Button>')
-            self.master.unbind('<Escape>')
-            
-        self.cell_popup.bind('<Return>', close_popup)
-        self.cell_popup.bind('<FocusOut>', escape_popup)
-        self.master.bind('<Button>', click_off)
-        self.master.bind('<Escape>', escape_popup)
-
-    def delete(self, event=None):
-        """Delete a cell and delete its contents from the glossary."""
-        iids = self.tree.selection()
-        offset = 0
-        for iid in iids:
-            result_number = int(self.tree.set(iid, 'Result'))- offset
-            self.gm.delete(self.search_results[result_number])
-            self.search_results.pop(result_number)
-            offset += 1
-        self.display_results(self.search_results)
+        self.output.display(self.search_results)
 
     def add(self, arg):
         """Create a dialogue for adding a row to a glossary."""
         if self.active_glossary.get() == '':
             return
-        add_dialogue = tk.Toplevel(self.master)
-        add_dialogue.title('Add new entry')
-
-        # HEADERS #
-        headers = ('Source', 'Translation', 'Context', 'Glossary')
-        for i in range(len(headers)):
-            label = tk.Label(add_dialogue, text=headers[i])
-            label.grid(row=0, column=i)
-
-        # ENTRY FIELDS #
-        source_entry = tk.Entry(add_dialogue, font=self.config['font1'])
-        translation_entry = tk.Entry(add_dialogue, font=self.config['font1'])
-        context_entry = tk.Entry(add_dialogue, font=self.config['font1'])
-
-        source_entry.insert(0, arg)
-        translation_entry.focus_set()
-
-        # GLOSSARY DROPDOWN #
-        glossary_button = tk.Menubutton(
-            add_dialogue
-            , textvariable=self.active_glossary
-            , font=self.config['font1']
-            , bg='#fff'
-            , activebackground='#fff'
-            , relief='sunken'
-            , width='20'
-            , anchor='w'
-            , pady=1
-            , padx=1
-            )
-        glossary_menu = tk.Menu(glossary_button, bg='#fff', tearoff=False)
-
-        for glossary in self.gm.list_glossaries():
-            glossary_menu.add_radiobutton(label=glossary, variable=self.active_glossary, value=glossary)
-        glossary_button.configure(menu=glossary_menu)
-
-        second_row = [source_entry, translation_entry, context_entry, glossary_button]
-        for i in range(len(second_row)):
-            second_row[i].grid(row=1, column=i, sticky='ew', padx=1)
-
-        def add_to_glossary():
-            new_entry = OrderedDict([
-                ('source', source_entry.get())
-                , ('translation', translation_entry.get())
-                , ('context', context_entry.get())
-                 ])
-            if not new_entry['source'] == '':
-                self.gm.add_entry(new_entry, self.active_glossary.get())
-                self.search(source_entry.get())
-                add_dialogue.destroy()
-
-        #CONFIRMATION BUTTONS #
-        add_button = tk.Button(add_dialogue, text='Add', command=add_to_glossary)
-        add_button.grid(row=2, column=2, sticky='ew', pady=5)
-        cancel_button = tk.Button(add_dialogue, text='Cancel', command=add_dialogue.destroy)
-        cancel_button.grid(row=2, column=3, sticky='ew', pady=5)
-        
-        add_dialogue.grab_set()
-        add_dialogue.grid_rowconfigure(1, weight=1)
-
-        add_dialogue.bind('<Return>', lambda event: add_button.invoke())
-        add_dialogue.bind('<Escape>', lambda event: cancel_button.invoke())
+        add_dialogue = AddDialogue(self, arg)
+        if add_dialogue.new_entry:
+            self.gm.add_entry(add_dialogue.new_entry, self.active_glossary.get())
+            self.search(add_dialogue.new_entry['source'])
 
     def new(self, event=None):
         """Create a dialogue for adding a new glossary to the manager."""
@@ -350,7 +186,7 @@ OrderedDict([{source, translation, context, glossary, index, ratio}])"""
             'There is already a glossary with the name {}.'.format(filename)
             )
             return
-        self.gm.new_glossary(filepath, filename)
+        self.gm.add_glossary(filepath, filename, mode='new')
         self.active_glossary.set(filename)
         self.status.set('Loaded glossaries: {}'.format('; '.join(self.gm.list_glossaries())))
 
@@ -367,16 +203,19 @@ OrderedDict([{source, translation, context, glossary, index, ratio}])"""
                 )
             )
         if filepath == '': return
-        filename = filepath[filepath.rfind('/') + 1:]
-        if filename in self.gm.list_glossaries():
-            messagebox.showwarning(
-            'File not imported',
-            'There is already a glossary with the name {}.'.format(filename)
-            )
-            return
-        try: self.gm.add_glossary(filepath, filename)
-        except Exception as e: messagebox.showerror('Import error', str(e))
-        self.display_results(self.gm.display_contents(filename))
+        name = filepath[filepath.rfind('/') + 1:filepath.rfind('.')]
+        filename = name
+        i = 2
+        while filename + '.csv' in self.gm.list_glossaries():
+            if relpath(filepath[:filepath.rfind('/')], self.config['path']) == '.': return
+            filename = name + str(i)
+            i += 1
+        filename = filename + '.csv'
+        try: self.gm.add_glossary(filepath, filename, mode='open')
+        except Exception:
+            messagebox.showerror('Import error', 'An error occurred while importing that file.')
+            raise
+        self.output.display(self.gm.display_contents(filename))
         self.status.set('Loaded glossaries: {}'.format('; '.join(self.gm.list_glossaries())))
 
     def change_gm_path(self, event=None):
@@ -387,17 +226,24 @@ OrderedDict([{source, translation, context, glossary, index, ratio}])"""
             , mustexist=True
             )
         if new_path == '': return
-        new_path = relpath(new_path)
+        try:
+            new_path = relpath(new_path)
+        except:
+            pass
         self.config_parser.set('USER', 'path', new_path)
         with open('config.ini', 'w', encoding='utf-8') as conf:
             self.config_parser.write(conf)
         self.setup_gm()
 
+    def change_default_glossary(self, *args):
+        self.config_parser.set('USER', 'default_glossary', self.active_glossary.get())
+        with open('config.ini', 'w', encoding='utf-8') as conf:
+            self.config_parser.write(conf)
+
     def about(self, event=None):
         """Display an about box with the copyright licence."""
         about_text = str
-        with open('licence.txt') as f: about_text = f.read()
-        messagebox.showinfo(title='About', message=about_text)
+        messagebox.showinfo(title='About', message=licence._)
 
     def save_all(self, event=None):
         """Save all changes to all glossaries."""
@@ -406,23 +252,29 @@ OrderedDict([{source, translation, context, glossary, index, ratio}])"""
 
     def exit(self, event=None):
         """Exit the tkinter loop."""
-        if self.gm.unsaved_changes():
-            save = messagebox.askyesno(
-                title='Save on close'
-                , message='Save changes to glossaries before closing?'
-                )
-            if save:
-                self.save_all()
-        self.master.destroy()
+        try:
+            if self.gm.unsaved_changes():
+                save = messagebox.askyesnocancel(
+                    title='Save on close'
+                    , message='Save changes to glossaries before closing?'
+                    )
+                if save == None:
+                    return
+                elif save:
+                    self.save_all()
+        except Exception as e:
+            print(e)
+            pass
+        self.parent.destroy()
 
     def hotkey_listen(self):
         """ Instantiate the global hotkey listener, which returns highlighted text from other
 programs via the clipboard, then search for that text. """
-        self.hotkey_listener = hotkeys.GlobalHotkeyListener(
+        self.hotkey_listener = GlobalHotkeyListener(
             self.config['hotkey_mod']
             , self.config['hotkey_key']
             , self.config.getfloat('hotkey_sleep_time')
-            , self.master
+            , self
             )
         while True:
             paste = self.hotkey_listener.listen()
@@ -435,8 +287,5 @@ programs via the clipboard, then search for that text. """
 
 if __name__ == '__main__':
     root = tk.Tk()
-    listbox = GlossaryManagerGUI(root)
-    root.lift()
-    root.update()
+    ui = GlossaryManagerGUI(root)
     root.mainloop()
-

@@ -1,5 +1,6 @@
 import win32con, win32gui, win32console, win32api
 import ctypes, time, pyperclip
+import tkinter as tk
 
 class GlobalHotkeyListener:
 
@@ -41,10 +42,5 @@ class GlobalHotkeyListener:
         return search_arg
     
 if __name__ == '__main__':
-    ghl = GlobalHotkeyListener('shift', 'insert', 1)
-    for i in range(2):
-        #paste = ghl.listen()
-        #print(paste)
-        time.sleep(ghl.sleeptime)
-        win32api.keybd_event(0xDF, 0, 0, 0)
-    
+    TK = tk.Tk()
+    ki = KeyIdentifier(TK)
