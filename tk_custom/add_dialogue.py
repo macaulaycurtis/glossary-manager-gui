@@ -5,24 +5,31 @@ class AddDialogue(tk.Toplevel):
 
     def __init__(self, parent, arg):
         tk.Toplevel.__init__(self, parent)
-        self.title('Add new entry')
         self.parent = parent
         self._create_headers()
         self._create_fields()
         self._create_buttons()
+        self._setup_window()
+        self._setup_bindings()
+        self.source_entry.insert(0, arg)
+
+    def _setup_window(self):
+        self.title('Add new entry')
         self.grab_set()
-        self.grid_rowconfigure(1, weight=1)
+        self.transient(self.parent)
+        self.resizable(False, False)
+        self.translation_entry.focus_set()
+
+    def _setup_bindings(self):
         self.bind('<Return>', lambda event: self.confirm())
         self.bind('<Escape>', lambda event: self.cancel())
         self.protocol("WM_DELETE_WINDOW", self.cancel)
-        self.source_entry.insert(0, arg)
-        self.translation_entry.focus_set()
-        self.wait_window(self)
 
     def _create_headers(self):
+        self.grid_rowconfigure(1, weight=1)
         headers = ('Source', 'Translation', 'Context', 'Glossary')
-        for i in range(len(headers)):
-            label = tk.Label(self, text=headers[i])
+        for i, header in enumerate(headers):
+            label = tk.Label(self, text=header, font=self.parent.config['font2'])
             label.grid(row=0, column=i)
 
     def _create_fields(self):
@@ -48,10 +55,8 @@ class AddDialogue(tk.Toplevel):
         glossary_button.configure(menu=glossary_menu)
 
         second_row = [self.source_entry, self.translation_entry, self.context_entry, glossary_button]
-        for i in range(len(second_row)):
-            second_row[i].grid(row=1, column=i, sticky='ew', padx=1)
-
-
+        for i, widget in enumerate(second_row):
+            widget.grid(row=1, column=i, sticky='ew', padx=1)
 
     def _create_buttons(self):
         add_button = tk.Button(self, text='Add', command=self.confirm)

@@ -1,32 +1,38 @@
-import os, threading
+import threading
+from pathlib import Path
 from gm.glossary import Glossary
 
 class GlossaryManager:
 
-    def __init__(self, path):
+    def load(self, path):
+        """Attempt to load all files in the directory (str)"""
         self.glossaries = {}
         self.glossary_dir = path
+        filepaths = path.iterdir()
+        for filepath in filepaths:
+            if filepath.is_file():
+                t = threading.Thread(target=self.add_glossary, args=(filepath,))
+                t.start()
+                t.join()
 
-    def load(self, path=None):
-        """Attempt to load all files in the directory (str)"""
-        if path == None:
-            path = self.glossary_dir
-        try:
-            filenames = (os.listdir(path))
-            for filename in filenames:
-               filepath = self.glossary_dir + '/' + filename
-               if os.path.isfile(filepath):
-                   t = threading.Thread(target=self.add_glossary, args=(filepath, filename))
-                   t.start()
-                   t.join()
-        except FileNotFoundError:
-            pass
-
-    def add_glossary(self, filepath, filename, mode=None):
+    def add_glossary(self, filepath, mode=None):
         """ Add a glossary to the glossaries dict.
         ARGS: filepath (string), short_name (string) """
         try:
-            self.glossaries.update({filename : Glossary(filepath, filename, mode, self.glossary_dir)})
+            if mode == 'open':
+                new_stem = filepath.stem
+                if new_stem + '.csv' in self.glossaries and filepath.parent.samefile(self.glossary_dir):
+                    raise Exception('File is already an imported glossary.')
+                i = 2
+                while new_stem + '.csv' in self.glossaries:
+                    new_stem = filepath.stem + str(i)
+                    i += 1
+                new_path = self.glossary_dir.joinpath(new_stem + '.csv')
+                self.glossaries.update({new_path.name : Glossary(filepath, mode, new_path)})
+            else:
+                self.glossaries.update({filepath.name : Glossary(filepath, mode)})
+        except FileNotFoundError:
+            pass
         except Exception:
             raise
 

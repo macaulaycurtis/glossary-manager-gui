@@ -23,7 +23,7 @@ class Spreadsheet(tk.Frame):
             self.tree.column(c,minwidth=100)
         self.tree.grid(column=0, row=0, sticky='nsew', in_=self)
         ttk.Style().configure('Treeview', font=self.config['font1'])
-        ttk.Style().configure('Treeview.Heading', font=self.config['font2'])          
+        ttk.Style().configure('Treeview.Heading', font=self.config['font2'])
 
     def _create_scrollbars(self):
         vertical_scroll = ttk.Scrollbar(orient='vertical', command=self.tree.yview)
@@ -45,11 +45,9 @@ class Spreadsheet(tk.Frame):
         """Display the results of a search in the ttk tree."""
         self.data = data
         self.tree.delete(*self.tree.get_children())
-        i = 0
-        for r in self.data:
+        for i, r in enumerate(self.data):
             item = (r['source'], r['translation'], r['context'], r['glossary'], i)
             iid = self.tree.insert('', 'end', values=item)
-            i += 1
 
     def context_menu(self, event):
         self.cell_context_menu.entryconfig(0, state='normal')
@@ -117,10 +115,8 @@ class Spreadsheet(tk.Frame):
     def delete(self, event=None):
         """Delete a cell and delete its contents from the glossary."""
         iids = self.tree.selection()
-        offset = 0
-        for iid in iids:
-            result_number = int(self.tree.set(iid, 'Result'))- offset
+        for offset, iid in enumerate(iids):
+            result_number = int(self.tree.set(iid, 'Result')) - offset
             self.gm.delete(self.data[result_number])
             self.data.pop(result_number)
-            offset += 1
         self.display(self.data)

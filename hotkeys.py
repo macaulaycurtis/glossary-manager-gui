@@ -1,46 +1,55 @@
-import win32con, win32gui, win32console, win32api
-import ctypes, time, pyperclip
+import time
+import pyperclip
+from pynput.keyboard import Key, Controller, Listener
 import tkinter as tk
 
-class GlobalHotkeyListener:
+class GlobalHotkeyListener(Listener):
 
-    def __init__(self, m, k, sleeptime, root=None):
-        """Register hotkey"""
-        mod = {'shift' : win32con.MOD_SHIFT, 'control' : win32con.MOD_CONTROL}
-        key = {'insert' : 0x2D, 'f8' : 0x77, 'cbracket' : 0xDD}
-        ctypes.windll.user32.RegisterHotKey(None, 1, mod[m], key[k])
-        self.root = root
+    def __init__(self, hotkeys, sleeptime, callback, parent=None):
+        Listener.__init__(self, on_press=self.on_press, on_release=self.on_release)
+
+        self.keyboard = Controller()
+        self.parent = parent
         self.sleeptime = sleeptime
+        self.callback = callback
+        self.mod = hotkeys[0]
+        self.key = hotkeys[1]
+        
+        self.mod_pressed = False
+        self.key_pressed = False
+        self.validated = False
 
-    def listen(self):
-        """Wait for hotkey to be triggered, then get and return highlighted text. """
-        msg = ctypes.wintypes.MSG()
-        while ctypes.windll.user32.GetMessageW(ctypes.byref(msg), None, 0, 0) != 0:
-            if msg.message == win32con.WM_HOTKEY:
-                if self.root == None or self.root.focus_get() == None:
-                    return self.get_highlighted_text()
+    def on_press(self, key):
+        if str(key) == self.mod:
+            self.mod_pressed = True
+        if str(key) == self.key:
+            self.key_pressed = True
+        if self.mod_pressed and self.key_pressed:
+            self.validated = True
 
-    def unregister(self):
-        ctypes.windll.user32.UnregisterHotKey(None, 1)
+    def on_release(self, key):
+        if str(key) == self.mod:
+            self.mod_pressed = False
+        if str(key) == self.key:
+            self.key_pressed = False
+        if self.validated and not (self.mod_pressed or self.key_pressed):
+            self.validated = False
+            self.get_selection()
 
-    def get_highlighted_text(self):
+    def get_selection(self):
         """Save clipboard, borrow it for a second to copy the highlighted text, then restore the original.
         (Only works on programs that use ctrl+c to copy.)"""
-        original_clipboard = pyperclip.paste()
-
-        #Emulate Ctrl+C
-        time.sleep(self.sleeptime) #Sleep to allow the user's fingers to leave the keys.
-        win32api.keybd_event(win32con.VK_LCONTROL, 0, 0, 0)
-        win32api.keybd_event(0x43, 0, 0, 0)
-        time.sleep(self.sleeptime) #Sleep to allow the program to detect the virtual keypress.
-        win32api.keybd_event(win32con.VK_LCONTROL, 0, win32con.KEYEVENTF_KEYUP, 0)
-        win32api.keybd_event(0x43, 0, win32con.KEYEVENTF_KEYUP, 0)
-        time.sleep(self.sleeptime) #Sleep to allow the program to respond.
-        
-        search_arg = pyperclip.paste()
-        pyperclip.copy(original_clipboard)
-        return search_arg
+        if self.parent == None or self.parent.focus_get() == None: #Make sure the parent doesn't have focus
+            original_clipboard = pyperclip.paste()
+            with self.keyboard.pressed(Key.ctrl):
+                self.keyboard.press('c')
+                time.sleep(self.sleeptime) #Sleep to allow the program to detect the virtual keypress.
+                self.keyboard.release('c')
+            time.sleep(self.sleeptime) #Sleep to allow the program to respond.           
+            return_value = pyperclip.paste()
+            pyperclip.copy(original_clipboard)
+            self.callback(return_value)
     
 if __name__ == '__main__':
-    TK = tk.Tk()
-    ki = KeyIdentifier(TK)
+    ghk = GlobalHotkeyListener(('Key.ctrl_r', "'\\x1d'"), 0.05, lambda x: print(x))
+    ghk.start()
