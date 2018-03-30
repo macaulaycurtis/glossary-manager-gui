@@ -1,7 +1,6 @@
 import time
 import pyperclip
 from pynput.keyboard import Key, Controller, Listener
-import tkinter as tk
 
 class GlobalHotkeyListener(Listener):
 

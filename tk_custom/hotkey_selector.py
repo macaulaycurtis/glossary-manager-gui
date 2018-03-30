@@ -6,26 +6,26 @@ class HotkeySelector(tk.Toplevel):
     def __init__(self, parent):
         tk.Toplevel.__init__(self, parent)
         self.parent = parent
-        self._create_widgets()
-        self._setup_window()
-        self._setup_bindings()
+        self.create_widgets()
+        self.setup_window()
+        self.setup_bindings()
         self.hotkey_mod = None
         self.hotkey_key = None
         self.confirmed = False
 
-    def _setup_window(self):
+    def setup_window(self):
         self.title('Select new global hotkey')
         self.resizable(False, False)
         self.focus_set()
         self.grab_set()
         self.transient(self.parent)
 
-    def _setup_bindings(self):
+    def setup_bindings(self):
         self.bind('<Return>', lambda event: self.confirm())
         self.bind('<Escape>', lambda event: self.cancel())
         self.protocol("WM_DELETE_WINDOW", self.cancel)
 
-    def _create_widgets(self):
+    def create_widgets(self):
         self.grid_rowconfigure(1, weight=1)
         
         instructions = tk.Label(self

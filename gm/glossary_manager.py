@@ -1,6 +1,6 @@
 import threading
 from pathlib import Path
-from gm.glossary import Glossary
+from app.gm.glossary import Glossary
 
 class GlossaryManager:
 
@@ -43,17 +43,17 @@ class GlossaryManager:
             g.replace('\'', '')
         return glossary_list
    
-    def search(self, keyword, fuzzy=0, column='source'):
+    def search(self, keyword, minimum_match=1.0, column='source'):
         """ Searches all glossaries for a keyword. ARGS: keyword (string) """
         search_results = []
         for glossary in self.glossaries:
             t = threading.Thread(
                 target=self.glossaries[glossary].search
-                , args=(search_results, keyword, column, fuzzy)
+                , args=(search_results, keyword, column, minimum_match)
                 )
             t.start()
             t.join()
-        if fuzzy:
+        if minimum_match > 0.0:
             search_results.sort(key = lambda s: s['ratio'], reverse=True)
         else:
             search_results.sort(key = lambda s: len(s['source']))

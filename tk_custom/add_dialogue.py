@@ -1,38 +1,39 @@
 import tkinter as tk
 from collections import OrderedDict
+from app.tk_custom.context_popup import context_popup
 
 class AddDialogue(tk.Toplevel):
 
     def __init__(self, parent, arg):
         tk.Toplevel.__init__(self, parent)
         self.parent = parent
-        self._create_headers()
-        self._create_fields()
-        self._create_buttons()
-        self._setup_window()
-        self._setup_bindings()
+        self.create_headers()
+        self.create_fields()
+        self.create_buttons()
+        self.setup_window()
+        self.setup_bindings()
         self.source_entry.insert(0, arg)
 
-    def _setup_window(self):
+    def setup_window(self):
         self.title('Add new entry')
         self.grab_set()
         self.transient(self.parent)
         self.resizable(False, False)
         self.translation_entry.focus_set()
 
-    def _setup_bindings(self):
+    def setup_bindings(self):
         self.bind('<Return>', lambda event: self.confirm())
         self.bind('<Escape>', lambda event: self.cancel())
         self.protocol("WM_DELETE_WINDOW", self.cancel)
 
-    def _create_headers(self):
+    def create_headers(self):
         self.grid_rowconfigure(1, weight=1)
         headers = ('Source', 'Translation', 'Context', 'Glossary')
         for i, header in enumerate(headers):
             label = tk.Label(self, text=header, font=self.parent.config['font2'])
             label.grid(row=0, column=i)
 
-    def _create_fields(self):
+    def create_fields(self):
         self.source_entry = tk.Entry(self, font=self.parent.config['font1'])
         self.translation_entry = tk.Entry(self, font=self.parent.config['font1'])
         self.context_entry = tk.Entry(self, font=self.parent.config['font1'])
@@ -58,7 +59,10 @@ class AddDialogue(tk.Toplevel):
         for i, widget in enumerate(second_row):
             widget.grid(row=1, column=i, sticky='ew', padx=1)
 
-    def _create_buttons(self):
+        for widget in [self.source_entry, self.translation_entry, self.context_entry]:
+            widget.bind('<Button-3>', context_popup)
+
+    def create_buttons(self):
         add_button = tk.Button(self, text='Add', command=self.confirm)
         add_button.grid(row=2, column=2, sticky='ew', pady=5)
         cancel_button = tk.Button(self, text='Cancel', command=self.cancel)

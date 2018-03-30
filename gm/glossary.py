@@ -30,7 +30,7 @@ class Glossary:
                     self.content.update({self.last_index : row})
                     self.last_index += 1
         elif self.filetype == '.xls' or self.filetype == '.xlsx':
-            wb = xlrd.open_workbook(str(self.filepath))
+            wb = xlrd.open_workbook(self.filepath)
             sheet = wb.sheet_by_index(0)
             self.sheetname = sheet.name
             for row in range(sheet.nrows):
@@ -45,12 +45,12 @@ class Glossary:
         else:
             raise FileNotFoundError
 
-    def search(self, search_results, keyword, column='source', fuzzy=0.0):
+    def search(self, search_results, keyword, column='source', minimum_match=0.0):
         """ Receive keyword as a string and a list of results, and append any hits for that keyword to the results list.
         Args: keyword = string
                 results = list"""
         keyword = keyword.casefold()
-        if not fuzzy:
+        if minimum_match == 0.0:
             for row in self.content:
                 r = self.content[row]
                 if keyword in r[column].casefold():
@@ -62,11 +62,11 @@ class Glossary:
                         , 'index' : row
                         , 'ratio' : None
                         })
-        if fuzzy:
+        else:
             for row in self.content:
                 r = self.content[row]
                 ratio = SequenceMatcher(None, keyword, r[column].casefold()).ratio()
-                if  ratio > fuzzy:
+                if  ratio >= minimum_match:
                     search_results.append({
                         'source' : r['source']
                         , 'translation' : r['translation']
